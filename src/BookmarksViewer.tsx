@@ -1,6 +1,25 @@
+// SVG copy icon styled button with animation
+const CopyIcon = styled.button<{ $copied?: boolean }>`
+	background: none;
+	border: none;
+	color: ${({ $copied }) => ($copied ? '#22c55e' : '#888')};
+	margin-left: 0.5em;
+	cursor: pointer;
+	font-size: 1.1em;
+	vertical-align: middle;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	transition: color 0.2s;
+	svg {
+		transition: transform 0.3s cubic-bezier(.4,2,.6,1), color 0.2s;
+		transform: ${({ $copied }) => ($copied ? 'translateY(-6px) scale(1.2)' : 'none')};
+	}
+`;
 import Fuse from 'fuse.js';
 import React, { useEffect, useState, useRef } from 'react';
 import styled from 'styled-components';
+import { Copy, Check } from 'lucide-react';
 
 // Type for a Chrome bookmark node
 interface BookmarkNode {
@@ -61,24 +80,65 @@ const StyledListItem = styled.li<StyledListItemProps>`
 	}
 `;
 
-function renderBookmarks(nodes: BookmarkNode[], highlightedIdx: number): React.ReactElement {
+// Helper to detect internal Chrome/Edge URLs
+const isInternalUrl = (url?: string) =>
+	url?.startsWith('chrome://') || url?.startsWith('edge://');
+
+interface RenderBookmarksProps {
+	nodes: BookmarkNode[];
+	highlightedIdx: number;
+	copiedIdx: number | null;
+	handleCopy: (e: React.MouseEvent, url: string, idx: number) => void;
+}
+
+const RenderBookmarks: React.FC<RenderBookmarksProps> = ({ nodes, highlightedIdx, copiedIdx, handleCopy }) => {
 	return (
 		<StyledList>
-			{nodes.map((node, idx) => (
-				<StyledListItem key={node.id} $highlighted={idx === highlightedIdx}>
-					<a href={node.url} target="_blank" rel="noopener noreferrer">{node.title || node.url}</a>
-				</StyledListItem>
-			))}
+			{nodes.map((node, idx) => {
+				const internal = isInternalUrl(node.url);
+				return (
+					<StyledListItem key={node.id} $highlighted={idx === highlightedIdx}>
+						{internal ? (
+							<span title="Copy link to clipboard" style={{ userSelect: 'text' }}>
+								{node.title || node.url}
+								<CopyIcon
+									onClick={e => handleCopy(e, node.url!, idx)}
+									title="Copy link"
+									$copied={copiedIdx === idx}
+									aria-label="Copy link"
+								>
+														{copiedIdx === idx ? (
+															<Check size={18} strokeWidth={2.2} />
+														) : (
+															<Copy size={18} strokeWidth={2.2} />
+														)}
+								</CopyIcon>
+							</span>
+						) : (
+							<a href={node.url} target="_blank" rel="noopener noreferrer">{node.title || node.url}</a>
+						)}
+					</StyledListItem>
+				);
+			})}
 		</StyledList>
 	);
-}
+};
 
 const BookmarksViewer: React.FC = () => {
 	const [bookmarks, setBookmarks] = useState<BookmarkNode[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState('');
 	const [highlightedIdx, setHighlightedIdx] = useState(0);
+	const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
+
+	// Clipboard copy handler
+	const handleCopy = (e: React.MouseEvent, url: string, idx: number) => {
+		e.preventDefault();
+		navigator.clipboard.writeText(url);
+		setCopiedIdx(idx);
+		setTimeout(() => setCopiedIdx(null), 700);
+	};
 
 	// Focus the search input when the popup opens
 	useEffect(() => {
@@ -209,7 +269,7 @@ const BookmarksViewer: React.FC = () => {
 				justifyContent: 'flex-start',
 			}}>
 				<ListContainer>
-					{filtered.length ? renderBookmarks(filtered, highlightedIdx) : <EmptyState>No bookmarks match your search.</EmptyState>}
+					{filtered.length ? <RenderBookmarks nodes={filtered} highlightedIdx={highlightedIdx} copiedIdx={copiedIdx} handleCopy={handleCopy} /> : <EmptyState>No bookmarks match your search.</EmptyState>}
 				</ListContainer>
 			</div>
 		</div>
