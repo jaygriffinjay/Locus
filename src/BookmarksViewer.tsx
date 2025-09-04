@@ -132,9 +132,14 @@ const BookmarksViewer: React.FC = () => {
 	const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
-	// Clipboard copy handler
+	// Clipboard copy handler (mouse)
 	const handleCopy = (e: React.MouseEvent, url: string, idx: number) => {
 		e.preventDefault();
+		doCopy(url, idx);
+	};
+
+	// Clipboard copy handler (shared)
+	const doCopy = (url: string, idx: number) => {
 		navigator.clipboard.writeText(url);
 		setCopiedIdx(idx);
 		setTimeout(() => setCopiedIdx(null), 700);
@@ -209,8 +214,24 @@ const BookmarksViewer: React.FC = () => {
 				setHighlightedIdx(idx => (idx - 1 + filtered.length) % filtered.length);
 			} else if (e.key === 'Enter') {
 				e.preventDefault();
-				const url = filtered[highlightedIdx]?.url;
-				if (url) window.open(url, '_blank');
+				const node = filtered[highlightedIdx];
+				if (!node) return;
+				const url = node.url;
+				if (!url) return;
+				if (isInternalUrl(url)) {
+					doCopy(url, highlightedIdx);
+					setTimeout(() => {
+						if (chrome && chrome.tabs && chrome.tabs.create) {
+							chrome.tabs.create({}, () => {
+								// Chrome will open the default new tab page (extensions like Momentum will work)
+							});
+						} else {
+							window.open('','_blank');
+						}
+					}, 120); // 120ms delay to ensure clipboard write
+				} else {
+					window.open(url, '_blank');
+				}
 			}
 		};
 		window.addEventListener('keydown', handleKeyDown);
