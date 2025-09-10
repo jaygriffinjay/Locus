@@ -1,25 +1,8 @@
 // SVG copy icon styled button with animation
-const CopyIcon = styled.button<{ $copied?: boolean }>`
-	background: none;
-	border: none;
-	color: ${({ $copied }) => ($copied ? '#22c55e' : '#888')};
-	margin-left: 0.5em;
-	cursor: pointer;
-	font-size: 1.1em;
-	vertical-align: middle;
-	padding: 0;
-	display: inline-flex;
-	align-items: center;
-	transition: color 0.2s;
-	svg {
-		transition: transform 0.3s cubic-bezier(.4,2,.6,1), color 0.2s;
-		transform: ${({ $copied }) => ($copied ? 'translateY(-6px) scale(1.2)' : 'none')};
-	}
-`;
 import Fuse from 'fuse.js';
 import React, { useEffect, useState, useRef } from 'react';
 import styled from 'styled-components';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ExternalLink } from 'lucide-react';
 
 // Type for a Chrome bookmark node
 interface BookmarkNode {
@@ -89,40 +72,131 @@ interface RenderBookmarksProps {
 	highlightedIdx: number;
 	copiedIdx: number | null;
 	handleCopy: (e: React.MouseEvent, url: string, idx: number) => void;
+	setCopiedIdx: React.Dispatch<React.SetStateAction<number | null>>;
+	setHighlightedIdx: React.Dispatch<React.SetStateAction<number>>;
 }
 
-const RenderBookmarks: React.FC<RenderBookmarksProps> = ({ nodes, highlightedIdx, copiedIdx, handleCopy }) => {
-	return (
-		<StyledList>
-			{nodes.map((node, idx) => {
-				const internal = isInternalUrl(node.url);
-				return (
-					<StyledListItem key={node.id} $highlighted={idx === highlightedIdx}>
-						{internal ? (
-							<span title="Copy link to clipboard" style={{ userSelect: 'text' }}>
-								{node.title || node.url}
-								<CopyIcon
-									onClick={e => handleCopy(e, node.url!, idx)}
-									title="Copy link"
-									$copied={copiedIdx === idx}
-									aria-label="Copy link"
-								>
+const Favicon = styled.img`
+	width: 18px;
+	height: 18px;
+	margin-right: 0.7em;
+	vertical-align: middle;
+	border-radius: 3px;
+	background: #f3f3f3;
+	box-shadow: 0 0 0.5px #bbb;
+`;
+
+// Improved Chrome icon SVG (closer to official favicon)
+const ChromeIcon = () => (
+	<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+		<circle cx="9" cy="9" r="9" fill="#fff" />
+		<path d="M9 9L17.5 9C17.5 4.2533 13.7467 0.5 9 0.5C5.393 0.5 2.285 2.697 0.75 6.001L9 9Z" fill="#EA4335" />
+		<path d="M9 9L0.75 6.001C-0.785 9.305 0.393 13.305 4.001 15.5C5.393 16.303 7.393 17.5 9 17.5V9Z" fill="#34A853" />
+		<path d="M9 9V17.5C10.607 17.5 12.607 16.303 14 15.5C17.607 13.305 18.785 9.305 17.25 6.001L9 9Z" fill="#FBBC05" />
+		<circle cx="9" cy="9" r="3.5" fill="#4285F4" stroke="#fff" strokeWidth="1" />
+	</svg>
+);
+
+const IconButton = styled.button<{ $copied?: boolean }>`
+  background: none;
+  border: none;
+  color: ${({ $copied }) => ($copied ? '#22c55e' : '#888')};
+  margin-left: 0.5em;
+  margin-right: 0.3em;
+  cursor: pointer;
+  font-size: 1.1em;
+  vertical-align: middle;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.2s;
+  svg {
+    transition: transform 0.3s cubic-bezier(.4,2,.6,1), color 0.2s;
+    transform: ${({ $copied }) => ($copied ? 'translateY(-6px) scale(1.2)' : 'none')};
+  }
+`;
+
+const RenderBookmarks: React.FC<RenderBookmarksProps & { navMode: 'keyboard' | 'mouse', setNavMode: React.Dispatch<React.SetStateAction<'keyboard' | 'mouse'>> }> = ({ nodes, highlightedIdx, copiedIdx, handleCopy, setCopiedIdx, setHighlightedIdx, navMode, setNavMode }) => {
+		const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
+		useEffect(() => {
+				const el = itemRefs.current[highlightedIdx];
+				if (el) {
+						el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+				}
+		}, [highlightedIdx]);
+		return (
+				<StyledList>
+						{nodes.map((node, idx) => {
+								const internal = isInternalUrl(node.url);
+								// Chrome favicon resource
+								const faviconUrl = node.url && !internal
+									? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(node.url)}`
+									: undefined;
+								return (
+										<StyledListItem
+											key={node.id}
+											$highlighted={idx === highlightedIdx}
+											ref={el => { itemRefs.current[idx] = el; }}
+											onMouseEnter={() => {
+												if (navMode === 'mouse') setHighlightedIdx(idx);
+											}}
+											onMouseMove={() => {
+												if (navMode !== 'mouse') setNavMode('mouse');
+											}}
+										>
+												<a
+													href={internal ? undefined : node.url}
+													target={internal ? undefined : "_blank"}
+													rel={internal ? undefined : "noopener noreferrer"}
+													style={{ display: 'flex', alignItems: 'center', cursor: internal ? 'default' : undefined }}
+												>
+													{internal
+														? <span style={{ display: 'inline-flex', marginRight: '0.7em' }}><ChromeIcon /></span>
+														: faviconUrl && <Favicon src={faviconUrl} alt="" />}
+													<span style={{ flex: 1 }}>{node.title || node.url}</span>
+													<IconButton
+														onClick={e => handleCopy(e, node.url!, idx)}
+														title="Copy link"
+														$copied={copiedIdx === idx}
+														aria-label="Copy link"
+													>
 														{copiedIdx === idx ? (
 															<Check size={18} strokeWidth={2.2} />
 														) : (
 															<Copy size={18} strokeWidth={2.2} />
 														)}
-								</CopyIcon>
-							</span>
-						) : (
-							<a href={node.url} target="_blank" rel="noopener noreferrer">{node.title || node.url}</a>
-						)}
-					</StyledListItem>
-				);
-			})}
-		</StyledList>
-	);
-};
+													</IconButton>
+													<IconButton
+														onClick={e => {
+															e.preventDefault();
+															if (!node.url) return;
+															if (internal) {
+																navigator.clipboard.writeText(node.url);
+																setCopiedIdx(idx);
+																setTimeout(() => {
+																	setCopiedIdx(null);
+																	if (chrome && chrome.tabs && chrome.tabs.create) {
+																		chrome.tabs.create({}, () => {});
+																	} else {
+																		window.open('', '_blank');
+																	}
+																}, 120);
+															} else {
+																window.open(node.url, '_blank');
+															}
+														}}
+														title={internal ? "Launch new tab" : "Open bookmark"}
+														aria-label={internal ? "Launch new tab" : "Open bookmark"}
+													>
+														<ExternalLink size={18} strokeWidth={2.2} />
+													</IconButton>
+												</a>
+										</StyledListItem>
+								);
+						})}
+				</StyledList>
+		);
+}
 
 const BookmarksViewer: React.FC = () => {
 	const [bookmarks, setBookmarks] = useState<BookmarkNode[]>([]);
@@ -130,6 +204,7 @@ const BookmarksViewer: React.FC = () => {
 	const [search, setSearch] = useState('');
 	const [highlightedIdx, setHighlightedIdx] = useState(0);
 	const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+	const [navMode, setNavMode] = useState<'keyboard' | 'mouse'>('keyboard');
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
 	// Clipboard copy handler (mouse)
@@ -206,12 +281,13 @@ const BookmarksViewer: React.FC = () => {
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (!filtered.length) return;
+			setNavMode('keyboard');
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
-				setHighlightedIdx(idx => (idx + 1) % filtered.length);
+				setHighlightedIdx(idx => idx < filtered.length - 1 ? idx + 1 : idx);
 			} else if (e.key === 'ArrowUp') {
 				e.preventDefault();
-				setHighlightedIdx(idx => (idx - 1 + filtered.length) % filtered.length);
+				setHighlightedIdx(idx => idx > 0 ? idx - 1 : idx);
 			} else if (e.key === 'Enter') {
 				e.preventDefault();
 				const node = filtered[highlightedIdx];
@@ -290,7 +366,7 @@ const BookmarksViewer: React.FC = () => {
 				justifyContent: 'flex-start',
 			}}>
 				<ListContainer>
-					{filtered.length ? <RenderBookmarks nodes={filtered} highlightedIdx={highlightedIdx} copiedIdx={copiedIdx} handleCopy={handleCopy} /> : <EmptyState>No bookmarks match your search.</EmptyState>}
+					{filtered.length ? <RenderBookmarks nodes={filtered} highlightedIdx={highlightedIdx} copiedIdx={copiedIdx} handleCopy={handleCopy} setCopiedIdx={setCopiedIdx} setHighlightedIdx={setHighlightedIdx} navMode={navMode} setNavMode={setNavMode} /> : <EmptyState>No bookmarks match your search.</EmptyState>}
 				</ListContainer>
 			</div>
 		</div>
