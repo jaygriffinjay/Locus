@@ -1,1 +1,1 @@
-A Chrome extension for launching bookmarks
+A Chrome extension for launching bookmarks fast
